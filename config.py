@@ -3,14 +3,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# טוקן הבוט של Tachborabot
+# טוקן רשמי של Tachborabot
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8738080530:AAGUQMcYuv6UxX1UCQC4fV7yijnIVuYZCr4")
 
-# יעדי הדיווח
+# יעדי הדיווח הרשמיים
 MOT_EMAIL = os.getenv("MOT_EMAIL", "pniotcrm@mot.gov.il")
 JERUSALEM_TRANSPORT_EMAIL = os.getenv("JERUSALEM_TRANSPORT_EMAIL", "david_zo@jerusalem.muni.il")
 
-# שרת דוא"ל (SMTP) - במידה ומוגדר ישלח מייל ישירות; אם לא מוגדר ייצר תבנית לשליחה
+# שרת דוא"ל (SMTP)
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")

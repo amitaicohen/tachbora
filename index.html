@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>בוט תלונות תחבורה ציבורית - ירושלים ומשרד התחבורה</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        body {
+            background-color: #e5ddd5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+        .chat-container {
+            width: 100%;
+            max-width: 550px;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+            overflow: hidden;
+        }
+        .chat-header {
+            background: #075e54;
+            color: white;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .chat-header h1 {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .chat-header p {
+            font-size: 0.8rem;
+            opacity: 0.85;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            background: #efeae2;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .message {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+        .message.bot {
+            background: #ffffff;
+            align-self: flex-start;
+            border-bottom-right-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .message.user {
+            background: #dcf8c6;
+            align-self: flex-end;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .choice-btn {
+            background: #128c7e;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 18px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .choice-btn:hover {
+            background: #075e54;
+        }
+        .chat-input-area {
+            padding: 12px;
+            background: #f0f0f0;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .chat-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #ccc;
+            border-radius: 24px;
+            outline: none;
+            font-size: 0.95rem;
+        }
+        .chat-input:focus {
+            border-color: #128c7e;
+        }
+        .send-btn {
+            background: #128c7e;
+            color: white;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+        .summary-card {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 6px;
+            font-size: 0.9rem;
+        }
+        .summary-card ul {
+            list-style: none;
+            padding-right: 4px;
+        }
+        .summary-card li {
+            margin-bottom: 6px;
+        }
+        .action-links {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .action-btn {
+            display: inline-block;
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            color: white;
+        }
+        .btn-email {
+            background: #0078d4;
+        }
+        .btn-gov {
+            background: #2b7a4b;
+        }
+    </style>
+</head>
+<body>
+
+<div class="chat-container">
+    <div class="chat-header">
+        <div>
+            <h1>🚌 מוקד דיווח תלונות תחבורה - ירושלים</h1>
+            <p>שליחה ישירה למשרד התחבורה ולמחזיק תיק התחבורה בעירייה</p>
+        </div>
+    </div>
+    <div class="chat-messages" id="messagesContainer">
+        <!-- Messages will appear here -->
+    </div>
+    <div class="chat-input-area">
+        <input type="text" id="userInput" class="chat-input" placeholder="הקלד כאן..." autocomplete="off" />
+        <button id="sendBtn" class="send-btn">➤</button>
+    </div>
+</div>
+
+<script>
+    const MOT_EMAIL = "pniotcrm@mot.gov.il";
+    const JERUSALEM_EMAIL = "david_zo@jerusalem.muni.il";
+    const GOV_FORM_URL = "https://www.gov.il/he/service/complaint_about_conduct_in_public_transportation";
+
+    const OPERATORS_DATA = {
+        "68": "סופרבוס",
+        "77": "סופרבוס",
+        "77א": "סופרבוס",
+        "15": "אקסטרה ירושלים",
+        "19": "אגד",
+        "19א": "אגד",
+        "25": "אגד",
+        "31": "אגד",
+        "32": "סופרבוס",
+        "49": "סופרבוס",
+        "59": "אגד",
+        "66": "אגד",
+        "74": "אגד",
+        "75": "אגד",
+        "504": "סופרבוס",
+        "506": "סופרבוס"
+    };
+
+    const state = {
+        step: 0,
+        fullName: "",
+        idNumber: "",
+        phone: "",
+        email: "",
+        lineNumber: "",
+        operator: "",
+        licensePlate: "",
+        dateTime: "",
+        location: "",
+        category: "",
+        details: ""
+    };
+
+    const messagesContainer = document.getElementById("messagesContainer");
+    const userInput = document.getElementById("userInput");
+    const sendBtn = document.getElementById("sendBtn");
+
+    function addMessage(text, sender = "bot", buttons = null, cardHtml = null) {
+        const msgDiv = document.createElement("div");
+        msgDiv.className = `message ${sender}`;
+        msgDiv.innerHTML = text;
+
+        if (cardHtml) {
+            msgDiv.innerHTML += cardHtml;
+        }
+
+        if (buttons && buttons.length > 0) {
+            const btnGroup = document.createElement("div");
+            btnGroup.className = "button-group";
+            buttons.forEach(btn => {
+                const b = document.createElement("button");
+                b.className = "choice-btn";
+                b.innerText = btn.label;
+                b.onclick = () => btn.action();
+                btnGroup.appendChild(b);
+            });
+            msgDiv.appendChild(btnGroup);
+        }
+
+        messagesContainer.appendChild(msgDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function startBot() {
+        addMessage("שלום! אני הבוט לרישום ודיווח תלונות על קווי אוטובוסים בירושלים.<br>התלונה מועברת רשמית הן ל<b>משרד התחבורה</b> והן ל<b>מחזיק תיק התחבורה בעיריית ירושלים</b>.<br><br>נתחיל: מה שמך המלא?");
+        state.step = 1;
+    }
+
+    async function handleUserResponse(text) {
+        if (!text.trim()) return;
+        addMessage(text, "user");
+        userInput.value = "";
+
+        switch (state.step) {
+            case 1:
+                state.fullName = text;
+                addMessage("מה מספר תעודת הזהות שלך?");
+                state.step = 2;
+                break;
+            case 2:
+                state.idNumber = text;
+                addMessage("מה מספר הטלפון הנייד שלך?");
+                state.step = 3;
+                break;
+            case 3:
+                state.phone = text;
+                addMessage("מה כתובת האימייל שלך? (לקבלת העתק מהתלונה)");
+                state.step = 4;
+                break;
+            case 4:
+                state.email = text;
+                addMessage("מה מספר קו האוטובוס עליו תרצה להתלונן?");
+                state.step = 5;
+                break;
+            case 5:
+                state.lineNumber = text.replace(/[^0-9א-ת]/g, "");
+                state.operator = OPERATORS_DATA[state.lineNumber] || "מפעיל תחבורה ציבורית בירושלים";
+                
+                addMessage(`זיהיתי: קו <b>${state.lineNumber}</b> מופעל בירושלים על ידי <b>${state.operator}</b>.<br><br>מתי התרחש המקרה? (לדוגמה: "היום ב-08:20" או תאריך ושעה)`);
+                state.step = 6;
+                break;
+            case 6:
+                state.dateTime = text;
+                
+                // הצעת לוחיות רישוי פוטנציאליות
+                addMessage("מערכת הניטור מאתרת לוחיות רישוי רלוונטיות של אוטובוסים שפעלו בקו. האם ידועה לך לוחית הרישוי?", "bot", [
+                    { label: "לא ידוע / לדלג", action: () => selectPlate("לא ידוע") },
+                    { label: "איתור לפי קו מהמאגר", action: () => fetchPlatesFromAPI(state.lineNumber) }
+                ]);
+                state.step = 7;
+                break;
+            case 7:
+                state.licensePlate = text;
+                askLocation();
+                break;
+            case 8:
+                state.location = text;
+                addMessage("מהי מהות התלונה העיקרית?", "bot", [
+                    { label: "🚫 אי-עצירה בתחנה", action: () => selectCategory("אי-עצירה בתחנה") },
+                    { label: "⏳ איחור / אי-יציאה של הקו", action: () => selectCategory("איחור משמעותי או אי-יציאה של הקו") },
+                    { label: "🗣️ התנהגות נהג / תלונת שירות", action: () => selectCategory("התנהגות נהג ושירות לקוחות") },
+                    { label: "⚠️ דילוג על מסלול / נהיגה מסוכנת", action: () => selectCategory("דילוג על מסלול או נהיגה מסוכנת") }
+                ]);
+                break;
+            case 9:
+                state.details = text;
+                renderFinalSummary();
+                break;
+        }
+    }
+
+    function selectPlate(plate) {
+        state.licensePlate = plate;
+        addMessage(`לוחית רישוי: ${plate}`, "user");
+        askLocation();
+    }
+
+    async function fetchPlatesFromAPI(line) {
+        addMessage("בודק נתוני SIRI משרד התחבורה עבור קו " + line + "...", "bot");
+        try {
+            const res = await fetch(`https://open-bus-stride-api.hasadna.org.il/siri_rides/list?limit=5`);
+            if (res.ok) {
+                const data = await res.json();
+                const plates = [...new Set(data.map(d => d.vehicle_license_plate).filter(Boolean))];
+                if (plates.length > 0) {
+                    const buttons = plates.map(p => ({
+                        label: "🚌 " + p,
+                        action: () => selectPlate(p)
+                    }));
+                    buttons.push({ label: "אחר / לא ברשימה", action: () => selectPlate("לא ידוע") });
+                    addMessage("אותרו לוחיות רישוי פעילות ממערכות ה-GPS. בחר את המתאימה:", "bot", buttons);
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log("Stride API offline or blocked", e);
+        }
+        addMessage("לא אותרו לוחיות ספציפיות בזמן אמת. נמשיך ללא לוחית רישוי.", "bot");
+        selectPlate("לא ידוע");
+    }
+
+    function askLocation() {
+        addMessage("היכן התרחש המקרה בירושלים? (שם תחנה, רחוב או צומת)");
+        state.step = 8;
+    }
+
+    function selectCategory(cat) {
+        state.category = cat;
+        addMessage(cat, "user");
+        addMessage("אנא פרט בקצרה מה קרה באירוע:");
+        state.step = 9;
+    }
+
+    function renderFinalSummary() {
+        const mailSubject = encodeURIComponent(`תלונה רשמית: קו ${state.lineNumber} בירושלים (${state.operator}) - ${state.category}`);
+        const mailBody = encodeURIComponent(`שלום רב,
+
+להלן תלונה רשמית בנושא תחבורה ציבורית בירושלים:
+
+■ פרטי המתלונן/ת:
+- שם מלא: ${state.fullName}
+- תעודת זהות: ${state.idNumber}
+- טלפון: ${state.phone}
+- דוא"ל: ${state.email}
+
+■ פרטי האירוע:
+- תאריך ושעה: ${state.dateTime}
+- עיר: ירושלים
+- מקום האירוע: ${state.location}
+- מספר קו: ${state.lineNumber}
+- חברה מפעילה: ${state.operator}
+- מספר רישוי אוטובוס: ${state.licensePlate}
+- נושא התלונה: ${state.category}
+
+■ פירוט האירוע:
+${state.details}
+
+נודה לבדיקתכם המעמיקה ועדכון על הטיפול.
+
+בברכה,
+${state.fullName}`);
+
+        const mailtoUrl = `mailto:${MOT_EMAIL},${JERUSALEM_EMAIL}?cc=${encodeURIComponent(state.email)}&subject=${mailSubject}&body=${mailBody}`;
+        const gmailWebUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${MOT_EMAIL},${JERUSALEM_EMAIL}&cc=${encodeURIComponent(state.email)}&su=${mailSubject}&body=${mailBody}`;
+
+        const card = `
+        <div class="summary-card">
+            <h4>📋 סיכום התלונה:</h4>
+            <ul>
+                <li><b>מתלונן:</b> ${state.fullName} (${state.idNumber})</li>
+                <li><b>קו ומפעיל:</b> קו ${state.lineNumber} (${state.operator})</li>
+                <li><b>רישוי:</b> ${state.licensePlate}</li>
+                <li><b>מועד ומיקום:</b> ${state.dateTime} | ${state.location}</li>
+                <li><b>נושא:</b> ${state.category}</li>
+                <li><b>פירוט:</b> ${state.details}</li>
+            </ul>
+            <div class="action-links">
+                <a href="${gmailWebUrl}" target="_blank" class="action-btn btn-email">📧 פתח ושלח ב-Gmail (למשרד התחבורה ועיריית ירושלים)</a>
+                <a href="${mailtoUrl}" class="action-btn" style="background:#4a5568;">✉️ פתח באפליקציית דוא"ל רגילה (Mailto)</a>
+                <a href="${GOV_FORM_URL}" target="_blank" class="action-btn btn-gov">🌐 מעבר לטופס המקוון הממשלתי (Gov.il)</a>
+            </div>
+        </div>`;
+
+        addMessage("התלונה נבנתה במלואה ומוכנה לשיגור!", "bot", null, card);
+    }
+
+    sendBtn.onclick = () => handleUserResponse(userInput.value);
+    userInput.onkeydown = (e) => {
+        if (e.key === "Enter") handleUserResponse(userInput.value);
+    };
+
+    startBot();
+</script>
+</body>
+</html>
