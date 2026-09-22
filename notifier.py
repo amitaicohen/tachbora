@@ -18,35 +18,40 @@ GOV_FORM_URL = "https://govforms.gov.il/mw/forms/PublicTransportRequest@mot.gov.
 
 async def submit_mot_complaint_and_get_ref(complaint_data: dict) -> str:
     """
-    אוטומציית מילוי הטופס הממשלתי הרשמי PublicTransportRequest@mot.gov.il
-    וחילוץ מספר פנייה רשמי
+    הפקת מספר פנייה ייחודי למעקב ובדיקת זמינות הטופס הממשלתי
     """
-    ref_number = None
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
-            await page.goto(GOV_FORM_URL, timeout=35000)
-            await page.wait_for_timeout(2000)
-
-            # ניסיון איתור ומילוי שדות הטופס הממשלתי לפי תגיות מקובלות
-            # השדות ממולאים ברקע ככל שהדף נטען
+            await page.goto(GOV_FORM_URL, timeout=25000)
+            await page.wait_for_timeout(1500)
             await browser.close()
     except Exception as e:
-        logging.info(f"GovForms automation background note: {e}")
+        logging.info(f"GovForms background note: {e}")
 
-    # הפקת מספר פנייה רשמי ומסודר למעקב
     date_code = datetime.now().strftime("%y%m%d")
     seq_code = random.randint(10000, 99999)
-    ref_number = f"MOT-{date_code}-{seq_code}"
-    return ref_number
+    return f"MOT-{date_code}-{seq_code}"
 
-def send_complaint_emails_with_ref(complaint_data: dict, ref_number: str) -> bool:
+def send_complaint_emails_with_ref(complaint_data: dict, ref_number: str) -> dict:
     """
-    שליחת דוא\"ל רשמי הכולל את מספר הפנייה, פרטי התחנה, כיוון הנסיעה, לוחיות הרישוי ושם הנהג
+    שליחת דוא"ל רשמי ומובנה בהתאם למבנה השדות של משרד התחבורה דרך SMTP
     """
+    if not SMTP_USER or not SMTP_PASSWORD:
+        logging.warning("פרטי SMTP ריקים ב-.env! לא נשלח מייל ישיר דרך שרת SMTP.")
+        return {
+            "success": False,
+            "reason": "missing_credentials",
+            "message": "פרטי שרת הדוא\"ל (SMTP_USER / SMTP_PASSWORD) אינם מוגדרים בקובץ .env"
+        }
+
     recipients = [MOT_EMAIL, JERUSALEM_TRANSPORT_EMAIL]
     user_email = complaint_data.get("email")
+
+    first_name = complaint_data.get('first_name', '')
+    last_name = complaint_data.get('last_name', '')
+    full_name = complaint_data.get('full_name') or f"{first_name} {last_name}".strip()
 
     subject = f"[פנייה #{ref_number}] תלונה: קו {complaint_data.get('line_number')} בירושלים ({complaint_data.get('operator')}) - {complaint_data.get('category')}"
 
@@ -56,44 +61,44 @@ def send_complaint_emails_with_ref(complaint_data: dict, ref_number: str) -> boo
 
     body = f"""שלום רב,
 
-הודעה זו נשלחה בעקבות פניית ציבור רשמית שהוגשה במערכת משרד התחבורה:
-מספר פנייה רשמי: {ref_number}
-טופס מקוון: {GOV_FORM_URL}
+להלן פניית ציבור רשמית בנושא תחבורה ציבורית, המוגשת בהתאם לשדות הנדרשים בנוהל משרד התחבורה:
+מספר פנייה למעקב: {ref_number}
+קישור לטופס מקוון: {GOV_FORM_URL}
 
-■ פרטי הפונה:
-- שם מלא: {complaint_data.get('full_name')}
-- תעודת זהות: {complaint_data.get('id_number')}
-- טלפון: {complaint_data.get('phone')}
+■ פרטי הפונה (המתלונן):
+- שם פרטי: {first_name}
+- שם משפחה: {last_name}
+- מספר זהות: {complaint_data.get('id_number')}
+- טלפון נייד לבירורים: {complaint_data.get('phone')}
 - כתובת דוא"ל: {complaint_data.get('email')}
+- כתובת למשלוח דואר: {complaint_data.get('street', '')}, {complaint_data.get('city', 'ירושלים')}
 
-■ פרטי הנסיעה והתחנה:
-- מספר תחנה (קוד תחנה): {complaint_data.get('stop_code', 'לא צוין')}
-- שם התחנה ומיקום: {complaint_data.get('stop_name', 'ירושלים')}
-- כיוון הנסיעה: {complaint_data.get('direction', 'לא צוין')}
+■ פרטי הנסיעה והאירוע:
+- סוג אמצעי תחבורה: אוטובוס עירוני
 - מספר קו: {complaint_data.get('line_number')}
 - חברה מפעילה: {complaint_data.get('operator')}
-- תאריך ושעה מדווחת: {complaint_data.get('date_time')}
+- כיוון נסיעה / יעד: {complaint_data.get('direction', 'לא צוין')}
+- תאריך האירוע: {complaint_data.get('incident_date', complaint_data.get('date_time', ''))}
+- שעת האירוע: {complaint_data.get('incident_time', '')}
+- תחנת עלייה / מיקום: {complaint_data.get('stop_name', 'ירושלים')} (קוד תחנה: {complaint_data.get('stop_code', 'לא צוין')})
 
 ■ פרטי האוטובוס והנהג:
 - מספר רישוי של האוטובוס באירוע: {complaint_data.get('license_plate', 'לא ידוע')}
 - שם הנהג / תג נהג: {complaint_data.get('driver_name', 'לא צוין - יאותר בסידור העבודה לפי לוחית הרישוי')}
-- אוטובוסים שפעלו בתחנה בחלון של 15 דקות לפני/אחרי:
+- אוטובוסים שפעלו בתחנה בחלון של 15 דקות לפני/אחרי (נתוני אמת):
 {nearby_str}
 
-■ נושא ופירוט התלונה:
-נושא: {complaint_data.get('category')}
-פירוט האירוע:
+■ מהות התלונה ופירוט האירוע:
+- נושא: {complaint_data.get('category')}
+- פירוט האירוע:
 {complaint_data.get('details')}
 
-נודה לקבלת אישור קבלה ועדכון בדבר הטיפול בפנייה לפי מספר הפנייה: {ref_number}.
+נודה לקבלת אישור קבלה ועדכון בדבר פתיחת הטיפול בפנייה לפי מספר הפנייה המצוין לעיל.
 
 בברכה,
-{complaint_data.get('full_name')}
+{full_name}
+טלפון: {complaint_data.get('phone')}
 """
-
-    if not SMTP_USER or not SMTP_PASSWORD:
-        logging.warning("SMTP not configured - mail logged to console.")
-        return True
 
     msg = MIMEMultipart()
     msg['From'] = SMTP_USER
@@ -110,7 +115,7 @@ def send_complaint_emails_with_ref(complaint_data: dict, ref_number: str) -> boo
             server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(SMTP_USER, all_targets, msg.as_string())
-        return True
+        return {"success": True, "message": "המייל נשלח בהצלחה דרך SMTP"}
     except Exception as e:
-        logging.error(f"Error sending email: {e}")
-        return False
+        logging.error(f"שגיאה בהתחברות לשרת הדוא\"ל: {e}")
+        return {"success": False, "reason": "smtp_error", "message": str(e)}
